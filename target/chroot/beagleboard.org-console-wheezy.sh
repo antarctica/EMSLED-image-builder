@@ -198,35 +198,31 @@ install_gem_pkgs () {
 		gem install jekyll -v 2.5.3 ${gem_wheezy} || true
 	fi
 }
-
 install_pip_pkgs () {
-	if [ -f /usr/bin/pip ] ; then
-		echo "Installing pip packages"
+        if [ -f /usr/bin/python ] ; then
+                wget https://bootstrap.pypa.io/get-pip.py || true
+                if [ -f get-pip.py ] ; then
+                        python get-pip.py
+                        rm -f get-pip.py || true
 
-		#debian@beaglebone:~$ pip install Adafruit_BBIO
-		#Downloading/unpacking Adafruit-BBIO
-		#  Downloading Adafruit_BBIO-0.0.19.tar.gz
-		#  Running setup.py egg_info for package Adafruit-BBIO
-		#    The required version of distribute (>=0.6.45) is not available,
-		#    and can't be installed while this script is running. Please
-		#    install a more recent version first, using
-		#    'easy_install -U distribute'.
-		#
-		#    (Currently using distribute 0.6.24dev-r0 (/usr/lib/python2.7/dist-packages))
-		#    Complete output from command python setup.py egg_info:
-		#    The required version of distribute (>=0.6.45) is not available,
-		#
-		#and can't be installed while this script is running. Please
-		#
-		#install a more recent version first, using
-		#
-		#'easy_install -U distribute'.
-		#
-		#(Currently using distribute 0.6.24dev-r0 (/usr/lib/python2.7/dist-packages))
+                        if [ -f /usr/local/bin/pip ] ; then
+                                echo "Installing pip packages"
+                                #Fixed in git, however not pushed to pip yet...(use git and install)
+                                #libpython2.7-dev
+                                #pip install Adafruit_BBIO
 
-		easy_install -U distribute
-		pip install Adafruit_BBIO
-	fi
+                                git_repo="https://github.com/adafruit/adafruit-beaglebone-io-python.git"
+                                git_target_dir="/opt/source/adafruit-beaglebone-io-python"
+                                git_clone
+                                if [ -f ${git_target_dir}/.git/config ] ; then
+                                        cd ${git_target_dir}/
+                                        python setup.py install
+                                fi
+                                pip install --upgrade PyBBIO
+                                pip install iw_parse
+                        fi
+                fi
+        fi
 }
 
 cleanup_npm_cache () {
@@ -492,13 +488,38 @@ todo () {
 	fi
 }
 
+install_emsled() {
+        cd /root/
+        wget "https://github.com/beagleboard/am335x_pru_package/archive/master.tar.gz" -O am335x_pru_package-master.tar.gz
+        wget "https://github.com/antarctica/EMSLED/archive/master.tar.gz" -O EMSLED-master.tar.gz
+        wget "https://github.com/antarctica/pypruss/archive/master.tar.gz" -O pypruss-master.tar.gz
+        tar zxf am335x_pru_package-master.tar.gz
+        tar zxf EMSLED-master.tar.gz
+        tar zxf pypruss-master.tar.gz
+        qemu_command="cd am335x_pru_package-master && make && make install && cd .."
+        qemu_warning
+        cd am335x_pru_package-master && make && make install && cd ..
+        qemu_command="cd pypruss-master && python setup.py install && cd .."
+        qemu_warning
+        cd pypruss-master && python setup.py install && cd ..
+        qemu_command="cd EMSLED-master && mkdir arm && make && cd .."
+        qemu_warning
+        cd EMSLED-master && mkdir arm && make && cd ..
+        rm -fr pypruss-master* am335x_pru_package-master*
+	cat << EOF >> /boot/uEnv.txt
+cape_disable=capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN
+cape_enable=capemgr.enable_partno=BB-UART2
+EOF
+}
+
 is_this_qemu
 
 setup_system
 setup_desktop
 
 #install_gem_pkgs
-#install_pip_pkgs
+install_pip_pkgs
+install_emsled
 #install_node_pkgs
 if [ -f /usr/bin/git ] ; then
 	git config --global user.email "${rfs_username}@example.com"

@@ -3,8 +3,8 @@
 time=$(date +%Y-%m-%d)
 DIR="$PWD"
 
-./RootStock-NG.sh -c bb.org-debian-wheezy-lxde-2gb
-./RootStock-NG.sh -c bb.org-debian-wheezy-lxde-4gb
+#./RootStock-NG.sh -c bb.org-debian-wheezy-lxde-2gb
+#./RootStock-NG.sh -c bb.org-debian-wheezy-lxde-4gb
 ./RootStock-NG.sh -c bb.org-debian-wheezy-console
 
 debian_lxde_stable="debian-7.9-lxde-armhf-${time}"
