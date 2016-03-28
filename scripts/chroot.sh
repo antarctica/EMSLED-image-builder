@@ -612,6 +612,8 @@ cat > "${DIR}/chroot_script.sh" <<-__EOF__
 			echo "Log: (chroot) Installing modules for: ${repo_rcnee_pkg_version}"
 			apt-get -y --force-yes install mt7601u-modules-${repo_rcnee_pkg_version} || true
 			apt-get -y --force-yes install rtl8723bu-modules-${repo_rcnee_pkg_version} || true
+			apt-get -y --force-yes install linux-firmware-image-${repo_rcnee_pkg_version} || true
+			apt-get -y --force-yes install linux-headers-${repo_rcnee_pkg_version} || true
 			depmod -a ${repo_rcnee_pkg_version}
 			update-initramfs -u -k ${repo_rcnee_pkg_version}
 		fi

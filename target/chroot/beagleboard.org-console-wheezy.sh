@@ -220,6 +220,7 @@ install_pip_pkgs () {
                                 fi
                                 pip install --upgrade PyBBIO
                                 pip install iw_parse
+				pip install netCDF4
                         fi
                 fi
         fi
@@ -506,8 +507,10 @@ install_emsled() {
         qemu_warning
         cd EMSLED-master && mkdir arm && make && cd ..
         rm -fr pypruss-master* am335x_pru_package-master*
+	git_repo="https://github.com/lwfinger/rtl8188eu.git"
+        git_target_dir="/opt/source/rtl8188eu"
+        git_clone
 	cat << EOF >> /boot/uEnv.txt
-cape_disable=capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN
 cape_enable=capemgr.enable_partno=BB-UART2
 EOF
 }
