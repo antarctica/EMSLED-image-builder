@@ -22,9 +22,8 @@
 
 export LC_ALL=C
 
-u_boot_release="v2016.03"
-u_boot_release_x15="v2015.07"
-#bone101_git_sha="50e01966e438ddc43b9177ad4e119e5274a0130d"
+u_boot_release="v2017.01"
+u_boot_release_x15="ti-2016.05"
 
 #contains: rfs_username, release_date
 if [ -f /etc/rcn-ee.conf ] ; then
@@ -109,6 +108,7 @@ setup_desktop () {
 		echo "        Identifier      \"Builtin Default fbdev Device 0\"" >> ${wfile}
 
 #		echo "        Driver          \"modesetting\"" >> ${wfile}
+#		echo "        Option          \"AccelMethod\"   \"none\"" >> ${wfile}
 		echo "        Driver          \"fbdev\"" >> ${wfile}
 
 		echo "#HWcursor_false        Option          \"HWcursor\"          \"false\"" >> ${wfile}
@@ -176,62 +176,72 @@ setup_desktop () {
 #		fi
 #	fi
 
-	#fix Ping:
-	#ping: icmp open socket: Operation not permitted
-	if [ -f /bin/ping ] ; then
-		chmod u+x /bin/ping
-	fi
-
-	if [ -f /etc/init.d/connman ] ; then
-		mkdir -p /etc/connman/ || true
-		wfile="/etc/connman/main.conf"
-		echo "[General]" > ${wfile}
-		echo "PreferredTechnologies=ethernet,wifi" >> ${wfile}
-		echo "SingleConnectedTechnology=false" >> ${wfile}
-		echo "AllowHostnameUpdates=false" >> ${wfile}
-		echo "PersistentTetheringMode=true" >> ${wfile}
-		echo "NetworkInterfaceBlacklist=usb0" >> ${wfile}
-
-		mkdir -p /var/lib/connman/ || true
-		wfile="/var/lib/connman/settings"
-		echo "[global]" > ${wfile}
-		echo "OfflineMode=false" >> ${wfile}
-		echo "" >> ${wfile}
-		echo "[Wired]" >> ${wfile}
-		echo "Enable=true" >> ${wfile}
-		echo "Tethering=false" >> ${wfile}
-		echo "" >> ${wfile}
-		echo "[WiFi]" >> ${wfile}
-		echo "Enable=true" >> ${wfile}
-		echo "Tethering=true" >> ${wfile}
-		echo "Tethering.Identifier=BeagleBone" >> ${wfile}
-		echo "Tethering.Passphrase=BeagleBone" >> ${wfile}
-		echo "" >> ${wfile}
-		echo "[Gadget]" >> ${wfile}
-		echo "Enable=false" >> ${wfile}
-		echo "Tethering=false" >> ${wfile}
-		echo "" >> ${wfile}
-		echo "[P2P]" >> ${wfile}
-		echo "Enable=false" >> ${wfile}
-		echo "Tethering=false" >> ${wfile}
-	fi
 }
-
-install_gem_pkgs () {
-	if [ -f /usr/bin/gem ] ; then
-		echo "Installing gem packages"
-		echo "debug: gem: [`gem --version`]"
-		gem_wheezy="--no-rdoc --no-ri"
-		gem_jessie="--no-document"
-
-		echo "gem: [beaglebone]"
-		gem install beaglebone || true
-
-		echo "gem: [jekyll ${gem_jessie}]"
-		gem install jekyll ${gem_jessie} || true
-	fi
+setup_A2DP () {
+    wfile="/etc/dbus-1/system.d/pulseaudio-system.conf"
+    line=$(grep -nr org.pulseaudio.Server ${wfile} | awk  -F ':'  '{print $1}')
+    #add <allow send_destination="org.bluez"/>
+    sed -i ''${line}'a <allow send_destination="org.bluez"/>' ${wfile}
+    
+    wfile="/etc/pulse/system.pa"
+    line=$(grep -nr  module-suspend-on-idle ${wfile} | awk  -F ':'  '{print $1}')
+    #remove load-module module-suspend-on-idle
+    sed -i ''${line}'d' ${wfile}
+    sed -i '$a ###Baozhu added'  ${wfile} 
+    sed -i '$a ### Automatically load driver modules for Bluetooth hardware' ${wfile}
+    sed -i '$a .ifexists module-bluetooth-policy.so'  ${wfile} 
+    sed -i '$a load-module module-bluetooth-policy'  ${wfile} 
+    sed -i '$a .endif'  ${wfile}
+    sed -i '$a .ifexists module-bluetooth-discover.so'  ${wfile}
+    sed -i '$a load-module module-bluetooth-discover'  ${wfile}
+    sed -i '$a .endif'  ${wfile}
+    
+    #allow users of pulseaudio to communicate with bluetoothd
+    wfile="/etc/dbus-1/system.d/bluetooth.conf"
+    sed -i '$c <!-- allow users of pulseaudio to'  ${wfile}
+    sed -i '$a communicate with bluetoothd -->'  ${wfile}
+    sed -i '$a <policy group="pulse">'  ${wfile}
+    sed -i '$a <allow send_destination="org.bluez"/>'  ${wfile}
+    sed -i '$a </policy>'  ${wfile}
+    sed -i '$a </busconfig>'  ${wfile}
+    
+    #add pulseaudio service
+    wfile="/lib/systemd/system/pulseaudio.service"
+    echo "[Unit]" > ${wfile}
+    echo "Description=Pulse Audio" >> ${wfile}
+    echo "After=bb-wl18xx-bluetooth.service" >> ${wfile}
+    echo "[Service]" >> ${wfile}
+    echo "Type=simple" >> ${wfile}
+    echo "ExecStart=/usr/bin/pulseaudio --system --disallow-exit --disable-shm" >> ${wfile}
+    echo "[Install]" >> ${wfile}
+    echo "WantedBy=multi-user.target" >> ${wfile}
+    systemctl enable pulseaudio.service || true
+    
+    #add a2dp users to root group
+    usermod -a -G bluetooth root
+    usermod -a -G pulse root
+    usermod -a -G pulse-access root
+    
+    #add hci0 to udev rules
+    wfile="/etc/udev/rules.d/10-local.rules"
+    echo "# Power up bluetooth when hci0 is discovered" > ${wfile}
+    echo "ACTION==\"add\", KERNEL==\"hci0\", RUN+=\"/bin/hciconfig hci0 up\"" >> ${wfile}
+    
+    #config alsa
+    # wfile="/etc/asound.conf"
+    # echo "pcm.!default {" > ${wfile}
+    # echo "  type pulse" >> ${wfile}
+    # echo "  fallback "sysdefault"" >> ${wfile}
+    # echo "  hint {" >> ${wfile}
+    # echo "    show on" >> ${wfile}
+    # echo "    description "ALSA Output to pulseaudio"" >> ${wfile}
+    # echo "  }" >> ${wfile}
+    # echo "}" >> ${wfile}
+    # echo "ctl.!default {" >> ${wfile}
+    # echo "  type pulse" >> ${wfile}
+    # echo "  fallback "sysdefault"" >> ${wfile}
+    # echo "}" >> ${wfile}
 }
-
 install_pip_pkgs () {
 	if [ -f /usr/bin/python ] ; then
 		wget https://bootstrap.pypa.io/get-pip.py || true
@@ -273,109 +283,25 @@ cleanup_npm_cache () {
 	fi
 }
 
-install_node_pkgs () {
-	if [ -f /usr/bin/npm ] ; then
-		cd /
-		echo "Installing npm packages"
-		echo "debug: node: [`nodejs --version`]"
-
-		if [ -f /usr/local/bin/npm ] ; then
-			npm_bin="/usr/local/bin/npm"
-		else
-			npm_bin="/usr/bin/npm"
-		fi
-
-		echo "debug: npm: [`${npm_bin} --version`]"
-
-		#debug
-		#echo "debug: npm config ls -l (before)"
-		#echo "--------------------------------"
-		#${npm_bin} config ls -l
-		#echo "--------------------------------"
-
-		#c9-core-installer...
-		${npm_bin} config delete cache
-		${npm_bin} config delete tmp
-		${npm_bin} config delete python
-
-		#fix npm in chroot.. (did i mention i hate npm...)
-		if [ ! -d /root/.npm ] ; then
-			mkdir -p /root/.npm
-		fi
-		${npm_bin} config set cache /root/.npm
-		${npm_bin} config set group 0
-		${npm_bin} config set init-module /root/.npm-init.js
-
-		if [ ! -d /root/tmp ] ; then
-			mkdir -p /root/tmp
-		fi
-		${npm_bin} config set tmp /root/tmp
-		${npm_bin} config set user 0
-		${npm_bin} config set userconfig /root/.npmrc
-
-		${npm_bin} config set prefix /usr/local/
-
-		#echo "debug: npm configuration"
-		#echo "--------------------------------"
-		#${npm_bin} config ls -l
-		#echo "--------------------------------"
-
-		sync
-
-		if [ -f /usr/local/bin/jekyll ] ; then
-			git_repo="https://github.com/beagleboard/bone101"
-			git_target_dir="/var/lib/cloud9"
-
-			if [ "x${bone101_git_sha}" = "x" ] ; then
-				git_clone
-			else
-				git_clone_full
+install_git_repos () {
+	if [ -d /usr/local/lib/node_modules/bonescript ] ; then
+		if [ -d /etc/apache2/ ] ; then
+			#bone101 takes over port 80, so shove apache/etc to 8080:
+			if [ -f /etc/apache2/ports.conf ] ; then
+				sed -i -e 's:80:8080:g' /etc/apache2/ports.conf
 			fi
-
-			if [ -f ${git_target_dir}/.git/config ] ; then
-				chown -R ${rfs_username}:${rfs_username} ${git_target_dir}
-				cd ${git_target_dir}/
-
-				if [ ! "x${bone101_git_sha}" = "x" ] ; then
-					git checkout ${bone101_git_sha} -b tmp-production
-				fi
-
-				echo "jekyll pre-building bone101"
-				/usr/local/bin/jekyll build --destination bone101
+			if [ -f /etc/apache2/sites-enabled/000-default ] ; then
+				sed -i -e 's:80:8080:g' /etc/apache2/sites-enabled/000-default
 			fi
-
-			wfile="/lib/systemd/system/jekyll-autorun.service"
-			echo "[Unit]" > ${wfile}
-			echo "Description=jekyll autorun" >> ${wfile}
-			echo "ConditionPathExists=|/var/lib/cloud9" >> ${wfile}
-			echo "" >> ${wfile}
-			echo "[Service]" >> ${wfile}
-			echo "WorkingDirectory=/var/lib/cloud9" >> ${wfile}
-			echo "ExecStart=/usr/local/bin/jekyll build --destination bone101 --watch" >> ${wfile}
-			echo "SyslogIdentifier=jekyll-autorun" >> ${wfile}
-			echo "" >> ${wfile}
-			echo "[Install]" >> ${wfile}
-			echo "WantedBy=multi-user.target" >> ${wfile}
-
-			systemctl enable jekyll-autorun.service || true
-
-			if [ -d /etc/apache2/ ] ; then
-				#bone101 takes over port 80, so shove apache/etc to 8080:
-				if [ -f /etc/apache2/ports.conf ] ; then
-					sed -i -e 's:80:8080:g' /etc/apache2/ports.conf
-				fi
-				if [ -f /etc/apache2/sites-enabled/000-default ] ; then
-					sed -i -e 's:80:8080:g' /etc/apache2/sites-enabled/000-default
-				fi
-				if [ -f /var/www/html/index.html ] ; then
-					rm -rf /var/www/html/index.html || true
-				fi
+			if [ -f /etc/apache2/sites-enabled/000-default.conf ] ; then
+				sed -i -e 's:80:8080:g' /etc/apache2/sites-enabled/000-default.conf
+			fi
+			if [ -f /var/www/html/index.html ] ; then
+				rm -rf /var/www/html/index.html || true
 			fi
 		fi
 	fi
-}
 
-install_git_repos () {
 	git_repo="https://github.com/prpplague/Userspace-Arduino"
 	git_target_dir="/opt/source/Userspace-Arduino"
 	git_clone
@@ -419,8 +345,8 @@ install_git_repos () {
 	fi
 
 	git_repo="https://github.com/RobertCNelson/dtb-rebuilder.git"
-	git_branch="4.1-ti"
-	git_target_dir="/opt/source/dtb-${git_branch}"
+	git_target_dir="/opt/source/dtb-4.4-ti"
+	git_branch="4.4-ti"
 	git_clone_branch
 
 	git_repo="https://github.com/beagleboard/bb.org-overlays"
@@ -429,13 +355,15 @@ install_git_repos () {
 	if [ -f ${git_target_dir}/.git/config ] ; then
 		cd ${git_target_dir}/
 		if [ ! "x${repo_rcnee_pkg_version}" = "x" ] ; then
-			is_kernel=$(echo ${repo_rcnee_pkg_version} | grep 4.1 || true)
-			if [ ! "x${is_kernel}" = "x" ] ; then
+			is_kernel=$(echo ${repo_rcnee_pkg_version} | grep 3.8.13 || true)
+			if [ "x${is_kernel}" = "x" ] ; then
 				if [ -f /usr/bin/make ] ; then
-					make
-					make install
+					if [ ! -f /lib/firmware/BB-ADC-00A0.dtbo ] ; then
+						make
+						make install
+						make clean
+					fi
 					update-initramfs -u -k ${repo_rcnee_pkg_version}
-					make clean
 				fi
 			fi
 		fi
@@ -453,11 +381,27 @@ install_git_repos () {
 		fi
 	fi
 
-	#am335x-pru-package
-	if [ -f /usr/include/prussdrv.h ] ; then
-		git_repo="git://git.ti.com/pru-software-support-package/pru-software-support-package.git"
-		git_target_dir="/opt/source/pru-software-support-package"
+	if [ ! -f /usr/lib/libroboticscape.so ] ; then
+		git_repo="https://github.com/StrawsonDesign/Robotics_Cape_Installer"
+		git_target_dir="/opt/source/Robotics_Cape_Installer"
 		git_clone
+	fi
+
+	#beagle-tester
+	git_repo="https://github.com/jadonk/beagle-tester"
+	git_target_dir="/opt/source/beagle-tester"
+	git_clone
+	if [ -f ${git_target_dir}/.git/config ] ; then
+		if [ -f /usr/lib/libroboticscape.so ] ; then
+			cd ${git_target_dir}/
+			if [ -f /usr/bin/make ] ; then
+				make
+				make install || true
+				if [ ! "x${image_type}" = "xtester-2gb" ] ; then
+					systemctl disable beagle-tester.service || true
+				fi
+			fi
+		fi
 	fi
 }
 
@@ -472,6 +416,7 @@ other_source_links () {
 	mkdir -p /opt/source/u-boot_${u_boot_release}/
 	wget --directory-prefix="/opt/source/u-boot_${u_boot_release}/" ${rcn_https}/${u_boot_release}/0001-omap3_beagle-uEnv.txt-bootz-n-fixes.patch
 	wget --directory-prefix="/opt/source/u-boot_${u_boot_release}/" ${rcn_https}/${u_boot_release}/0001-am335x_evm-uEnv.txt-bootz-n-fixes.patch
+	wget --directory-prefix="/opt/source/u-boot_${u_boot_release}/" ${rcn_https}/${u_boot_release}/0002-U-Boot-BeagleBone-Cape-Manager.patch
 	mkdir -p /opt/source/u-boot_${u_boot_release_x15}/
 	wget --directory-prefix="/opt/source/u-boot_${u_boot_release_x15}/" ${rcn_https}/${u_boot_release_x15}/0001-beagle_x15-uEnv.txt-bootz-n-fixes.patch
 
@@ -503,10 +448,9 @@ is_this_qemu
 
 setup_system
 setup_desktop
+setup_A2DP
 
-install_gem_pkgs
 install_pip_pkgs
-install_node_pkgs
 if [ -f /usr/bin/git ] ; then
 	git config --global user.email "${rfs_username}@example.com"
 	git config --global user.name "${rfs_username}"
