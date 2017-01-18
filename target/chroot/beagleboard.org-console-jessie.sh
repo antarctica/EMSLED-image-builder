@@ -359,12 +359,42 @@ unsecure_root () {
 	fi
 }
 
+install_emsled() {
+	cd /opt/source/
+	wget "https://github.com/beagleboard/am335x_pru_package/archive/master.tar.gz" -O am335x_pru_package-master.tar.gz
+	wget "https://github.com/antarctica/pypruss/archive/master.tar.gz" -O pypruss-master.tar.gz
+	tar zxf am335x_pru_package-master.tar.gz
+	tar zxf EMSLED-master.tar.gz
+	tar zxf pypruss-master.tar.gz
+	qemu_command="cd am335x_pru_package-master && make && make install && cd .."
+	qemu_warning
+	cd am335x_pru_package-master && make && make install && cd ..
+	qemu_command="cd pypruss-master && python setup.py install && cd .."
+	qemu_warning
+	cd pypruss-master && python setup.py install && cd ..
+	rm -f pypruss-master.tar.gz am335x_pru_package-master.tar.gz
+	cd /root/
+	wget "https://github.com/antarctica/EMSLED/archive/master.tar.gz" -O EMSLED-master.tar.gz
+	qemu_command="cd EMSLED-master && mkdir arm && make && cd .."
+	qemu_warning
+	cd EMSLED-master && mkdir arm && make && cd ..
+	git_repo="https://github.com/lwfinger/rtl8188eu.git"
+        git_target_dir="/opt/source/rtl8188eu"
+        git_clone
+	cat << EOF >> /boot/uEnv.txt
+ cape_disable=capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN
+ cape_enable=capemgr.enable_partno=BB-UART2
+}
+
 is_this_qemu
 
 setup_system
 setup_desktop
 
-#install_pip_pkgs
+#install_gem_pkgs
+install_pip_pkgs
+install_emsled
+#install_node_pkgs
 if [ -f /usr/bin/git ] ; then
 	git config --global user.email "${rfs_username}@example.com"
 	git config --global user.name "${rfs_username}"

@@ -60,3 +60,8 @@ if [ ! "x$test_debootstrap" = "x$minimal_debootstrap" ] ; then
 	rm -rf debootstrap_1.0.${minimal_debootstrap}_all.deb || true
 fi
 
+#sudo apt-get -y install software-properties-common curl
+#curl http://emdebian.org/tools/debian/emdebian-toolchain-archive.key | sudo apt-key add -
+#sudo add-apt-repository deb http://emdebian.org/tools/debian/ jessie main 
+#sudo apt-get update
+#sudo apt-get -y install crossbuild-essential-armhf

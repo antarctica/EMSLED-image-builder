@@ -199,7 +199,9 @@ install_pip_pkgs () {
 					python setup.py install
 				fi
 				pip install --upgrade PyBBIO
-				pip install iw_parse
+				pip install netCDF4
+				pip install numpy
+				pip install matplotlib
 			fi
 		fi
 	fi
