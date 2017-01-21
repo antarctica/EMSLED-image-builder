@@ -510,9 +510,6 @@ install_emsled() {
 	git_repo="https://github.com/lwfinger/rtl8188eu.git"
         git_target_dir="/opt/source/rtl8188eu"
         git_clone
-	cat << EOF >> /boot/uEnv.txt
-cape_enable=capemgr.enable_partno=BB-UART2
-EOF
 }
 
 is_this_qemu

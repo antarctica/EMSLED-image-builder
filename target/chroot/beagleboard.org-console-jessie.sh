@@ -381,9 +381,6 @@ install_emsled() {
 	git_repo="https://github.com/lwfinger/rtl8188eu.git"
         git_target_dir="/opt/source/rtl8188eu"
         git_clone
-	cat << EOF >> /boot/uEnv.txt
- cape_disable=capemgr.disable_partno=BB-BONELT-HDMI,BB-BONELT-HDMIN
- cape_enable=capemgr.enable_partno=BB-UART2
 }
 
 is_this_qemu
